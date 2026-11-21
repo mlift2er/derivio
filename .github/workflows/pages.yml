@@ -1,0 +1,48 @@
+name: Publish Derivio
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release containing derivio-site.zip
+        required: true
+        type: string
+      archive_sha256:
+        description: SHA-256 of the prepared site archive
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download and verify the site archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern derivio-site.zip
+          printf '%s  derivio-site.zip\n' "$ARCHIVE_SHA256" | sha256sum --check -
+          unzip -q derivio-site.zip -d site
+          test -f site/index.html
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
